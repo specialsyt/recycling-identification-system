@@ -1,5 +1,5 @@
 // Define the ADC pin to read from
-#define ADC_PIN A0  // Analog pin A0
+#define ADC_PIN A1  // Analog pin A0
 
 // Define the built-in LED pin
 #define LED_BUILTIN 13
@@ -47,6 +47,6 @@ void loop() {
   }
 
   // Small delay to avoid flooding the Serial Monitor
-  delay(500);
+  delay(50);
 }
 
