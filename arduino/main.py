@@ -5,6 +5,8 @@ import platform
 import sys
 import argparse
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')  # Force TkAgg backend
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -38,8 +40,9 @@ def find_arduino_port():
 class CIRPlotter:
     def __init__(self):
         # Initialize the plot
+        plt.ion()  # Enable interactive mode
         self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 12))
-        self.fig.suptitle('Channel Impulse Response')
+        self.fig.canvas.manager.window.attributes('-topmost', 1)  # Keep window on top
         
         # Initialize empty data for 1015 samples (skipping first garbage byte)
         self.x = np.arange(1015)  
@@ -86,6 +89,10 @@ class CIRPlotter:
         self.max_shift = 100  # Maximum samples to check for alignment
         self.min_diff_threshold = 500  # Minimum difference to consider a change
         
+        plt.show(block=False)  # Show but don't block
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
     def validate_data(self, real_data, imag_data):
         """Validate the incoming data"""
         # Convert to numpy arrays if not already
@@ -190,31 +197,33 @@ class CIRPlotter:
         current_time = time.time_ns() / 1e6  # Convert to ms
         # Only update if more than rate ms have passed
         if current_time - self.last_update_time >= rate or live:
-            # Update the data
-            self.real_data = real_data
-            self.imag_data = imag_data
-            self.mag_data = mag_data
-            
-            # Update the lines
-            self.line_real.set_ydata(self.real_data)
-            self.line_imag.set_ydata(self.imag_data)
-            self.line_mag.set_ydata(self.mag_data)
-            
-            # Adjust y-axis limits if needed
-            self.ax1.relim()
-            self.ax1.autoscale_view()
-            self.ax2.relim()
-            self.ax2.autoscale_view()
-            self.ax3.relim()
-            self.ax3.autoscale_view()
-            # self.ax3.set_ylim(400, 1000)
-            
-            # Draw the updates
-            self.fig.canvas.draw_idle()
-            self.fig.canvas.flush_events()
-            
-            # Update the last update time
-            self.last_update_time = current_time
+            try:
+                # Update the data
+                self.real_data = real_data
+                self.imag_data = imag_data
+                self.mag_data = mag_data
+                
+                # Update the lines
+                self.line_real.set_ydata(self.real_data)
+                self.line_imag.set_ydata(self.imag_data)
+                self.line_mag.set_ydata(self.mag_data)
+                
+                # Adjust y-axis limits if needed
+                self.ax1.relim()
+                self.ax1.autoscale_view()
+                self.ax2.relim()
+                self.ax2.autoscale_view()
+                self.ax3.relim()
+                self.ax3.autoscale_view()
+                
+                # Draw the updates
+                self.fig.canvas.draw()
+                self.fig.canvas.flush_events()
+                
+                # Update the last update time
+                self.last_update_time = current_time
+            except Exception as e:
+                print(f"Error updating plot: {e}")
 
 def process_cir_data(raw_data, plotter=None, live=False, rate=1):
     real_data = []
