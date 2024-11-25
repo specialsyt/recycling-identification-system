@@ -71,37 +71,70 @@ def read_data(data_len=1016):
     except Exception as e:
         print(f"Error: {e}")
         
-def calculate_index(cir_no_object, cir_with_object, sampling_rate, thickness):
-    """
-    Calculate the refractive index of an object using two CIRs (with and without the object).
+def calculate_index(cir_no_object_mag, cir_with_object_mag):
+    """Calculate the time delay between two CIR measurements"""
+    print("\nDEBUG INFO:")
+    print(f"Signal lengths: no_object={len(cir_no_object_mag)}, with_object={len(cir_with_object_mag)}")
+    print(f"Max magnitudes: no_object={np.max(cir_no_object_mag):.2f}, with_object={np.max(cir_with_object_mag):.2f}")
     
-    Parameters:
-        cir_no_object (np.array): CIR data without the object.
-        cir_with_object (np.array): CIR data with the object.
-        sampling_rate (float): Sampling rate of the CIR in Hz.
-        thickness (float): Thickness of the object in meters.
+    # Ensure signals aren't identical
+    if np.array_equal(cir_no_object_mag, cir_with_object_mag):
+        print("WARNING: Signals are identical!")
+        return 0
     
-    Returns:
-        refractive_index (float): Estimated refractive index.
-    """
-    if cir_no_object is None or cir_with_object is None:
-        raise ValueError("Data wasn't properly collected, see above errors and retry.")
-        
-    c = const.c
+    # Find multiple peaks with a moderate threshold
+    threshold_no_obj = np.max(cir_no_object_mag) * 0.6
+    threshold_with_obj = np.max(cir_with_object_mag) * 0.6
     
-    # Step 1: Convert CIRs to magnitude
-    cir_no_object_mag = np.abs(cir_no_object)
-    cir_with_object_mag = np.abs(cir_with_object)
+    print(f"Peak detection thresholds: no_object={threshold_no_obj:.2f}, with_object={threshold_with_obj:.2f}")
     
-    # Step 2: Find the direct path peaks
-    peaks_no_object, _ = find_peaks(cir_no_object_mag, height=np.max(cir_no_object_mag) * 0.5)
-    peaks_with_object, _ = find_peaks(cir_with_object_mag, height=np.max(cir_with_object_mag) * 0.5)
+    peaks_no_object, properties_no_obj = find_peaks(cir_no_object_mag, 
+                                                   height=threshold_no_obj,
+                                                   distance=20)
+    peaks_with_object, properties_with_obj = find_peaks(cir_with_object_mag, 
+                                                       height=threshold_with_obj,
+                                                       distance=20)
     
+    print(f"Number of peaks found: no_object={len(peaks_no_object)}, with_object={len(peaks_with_object)}")
+    
+    # If no peaks found, return 0
     if len(peaks_no_object) == 0 or len(peaks_with_object) == 0:
-        raise ValueError("Unable to detect direct path in one or both CIRs.")
+        print("No peaks found in at least one signal")
+        return 0
     
-    index_difference = peaks_with_object[0] - peaks_no_object[0]
-    return index_difference
+    # Get and print peak information
+    heights_no_obj = properties_no_obj["peak_heights"]
+    heights_with_obj = properties_with_obj["peak_heights"]
+    
+    print("\nNo object peaks:")
+    for idx, (pos, height) in enumerate(zip(peaks_no_object, heights_no_obj)):
+        print(f"Peak {idx}: position={pos}, height={height:.2f}")
+        
+    print("\nWith object peaks:")
+    for idx, (pos, height) in enumerate(zip(peaks_with_object, heights_with_obj)):
+        print(f"Peak {idx}: position={pos}, height={height:.2f}")
+    
+    # Sort peaks by height
+    no_obj_sorted_idx = np.argsort(heights_no_obj)[::-1]
+    with_obj_sorted_idx = np.argsort(heights_with_obj)[::-1]
+    
+    peaks_no_object = peaks_no_object[no_obj_sorted_idx]
+    peaks_with_object = peaks_with_object[with_obj_sorted_idx]
+    
+    print("\nLooking for delays...")
+    # Look at multiple peak pairs to find meaningful delay
+    for i in range(min(3, len(peaks_no_object))):
+        for j in range(min(3, len(peaks_with_object))):
+            delay = peaks_with_object[j] - peaks_no_object[i]
+            print(f"Comparing peaks: no_obj[{i}]={peaks_no_object[i]} with_obj[{j}]={peaks_with_object[j]} -> delay={delay}")
+            if delay > 0:  # Only consider positive delays
+                # Convert sample difference to nanoseconds
+                time_delay = delay * (1000 / 1015)  # Scale factor may need adjustment
+                print(f"Found positive delay: {delay} samples = {time_delay:.2f} ns")
+                return time_delay
+    
+    print("No positive delays found between peak pairs")
+    return 0
     
 if __name__ == '__main__':    
     # Find the Arduino port

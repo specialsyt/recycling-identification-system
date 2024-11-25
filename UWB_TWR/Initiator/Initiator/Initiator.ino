@@ -78,11 +78,14 @@ int BEEP_PIN = 6;
 //UWB CIR
 //The most relevant samples for channel analysis are typically in the first part 
 // of the accumulator, where the main signal path and early multipath components are captured.
-uint8_t cir_data[1016]; // 254 complex samples, maximum size of DW1000 ACC register
+uint8_t cir_data[4064]; // 254 complex samples, maximum size of DW1000 ACC register
 
-
+void(* resetFunc) (void) = 0; // declare reset function at address 0
 
 void setup() {
+  // Configure reset pin
+  pinMode(PIN_RST, INPUT);  // Set as input to not interfere with external reset
+  
   Serial.begin(115200);
   while (!Serial)
   {
@@ -161,8 +164,8 @@ void handleReceived() {
 //  byte2char(rx_packet, 24);
 //  Serial.println(rx_msg_char);
 
-  DW1000.getAccMem(cir_data, 0, 254);
-  Serial.write(cir_data, 1016);
+  DW1000.getAccMem(cir_data, 0, 1016);
+  Serial.write(cir_data, 4064);
 	// for (int i=0;i<500;i=i+4)
 	// {
 	// 	Serial.print(cir_data[i+1], HEX);
@@ -205,6 +208,16 @@ void handleRxTO() {
 
 
 void loop() {
+  // Check for reset command at start of loop
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    if (command == "RESET") {
+      Serial.println("Resetting...");
+      delay(100);  // Give time for message to send
+      resetFunc();  // Call reset function
+    }
+  }
+  
   int recvd_resp_seq;
   
   //Take actions based on the current state
